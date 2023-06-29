@@ -1,0 +1,15 @@
+jobs:
+  textConverter:
+    type: App\Jobs\TextConverterJob
+  preProcessor:
+    type: App\Jobs\PreProcessorJob
+    params:
+      documents: !job textConverter
+  documentClassifier:
+    type: App\Jobs\DocumentClassifierJob
+    params:
+      documents: !job preProcessor
+  documentStore:
+    type: App\Jobs\DocumentStoreJob
+    params:
+      documents: !job documentClassifier
