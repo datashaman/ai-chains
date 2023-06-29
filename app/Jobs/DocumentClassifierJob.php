@@ -11,6 +11,6 @@ class DocumentClassifierJob extends Job
 
     public function handle()
     {
-        $this->done($this->documents);
+        $this->done(null, $this->documents);
     }
 }

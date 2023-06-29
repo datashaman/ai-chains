@@ -10,6 +10,8 @@ jobs:
     params:
       documents: !job preProcessor
   documentStore:
-    type: App\Jobs\DocumentStoreJob
+    type: App\Stores\OpensearchStore
     params:
       documents: !job documentClassifier
+      createIndex: true
+      recreateIndex: true

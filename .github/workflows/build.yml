@@ -1,0 +1,48 @@
+---
+name: Build
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      opensearch:
+        image: opensearchproject/opensearch
+        env:
+          DISABLE_INSTALL_DEMO_CONFIG: "true"
+          DISABLE_SECURITY_PLUGIN: "true"
+          OPENSEARCH_JAVA_OPTS: -Xms1024m -Xmx1024m
+          discovery.type: single-node
+        ports:
+          - 9200:9200
+          - 9600:9600
+        options: --health-cmd="curl -sSf http://opensearch:9200" --health-interval=15s --health-timeout=5s --health-retries=3
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.1
+
+      - name: Install Dependencies
+        run: |
+          composer install \
+            --no-ansi \
+            --no-interaction \
+            --no-progress \
+            --no-scripts \
+            --prefer-dist
+
+      - name: Run Tests
+        env:
+          OPENSEARCH_HOSTS: http://127.0.0.1:${{ job.services.opensearch.ports['9200'] }}
+        run: php artisan test
