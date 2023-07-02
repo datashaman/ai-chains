@@ -7,6 +7,7 @@ use App\Schema\Document;
 use App\Schema\Label;
 use App\Stores\OpensearchStore;
 use App\Stores\Store;
+use Illuminate\Support\Arr;
 use Tests\TestCase;
 
 class DocumentStoreTest extends TestCase
@@ -32,17 +33,20 @@ class DocumentStoreTest extends TestCase
         $this->ds->writeDocuments($this->documents);
 
         $docs = $this->ds->getAllDocuments();
+
         $this->assertEquals(count($docs), count($this->documents));
+
         $this->assertEquals(
-            array_map(
-                fn ($doc) => $doc->id,
-                $this->documents
-            ),
-            array_map(
-                fn ($doc) => $doc->id,
-                $docs
-            )
+            Arr::pluck($this->documents, 'id'),
+            Arr::pluck($docs, 'id')
         );
+    }
+
+    public function testWriteLabels()
+    {
+        $this->ds->writeLabels($this->labels);
+
+        $this->assertEquals($this->labels, $this->ds->getAlllabels());
     }
 
     protected function getDatastore(): Store

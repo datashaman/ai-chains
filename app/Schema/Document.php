@@ -3,6 +3,7 @@
 namespace App\Schema;
 
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Str;
 use ValueError;
 
@@ -10,15 +11,7 @@ class Document implements Arrayable
 {
     public static function make(array $attributes): self
     {
-        return new Document(
-            id: $attributes['id'],
-            content: $attributes['content'],
-            contentType: $attributes['contentType'],
-            idHashKeys: $attributes['idHashKeys'],
-            meta: $attributes['meta'],
-            score: $attributes['score'],
-            embedding: $attributes['embedding']
-        );
+        return App::make(static::class, $attributes);
     }
 
     public function __construct(

@@ -2,17 +2,24 @@
 
 namespace App\Schema;
 
+use Illuminate\Support\Facades\App;
+
 class Answer
 {
+    public static function make(array $attributes)
+    {
+        return App::make(static::class, $attributes);
+    }
+
     public function __construct(
-        protected string $answer,
-        protected string $type = 'extractive',
-        protected ?float $score = null,
-        protected ?array $context = null,
-        protected ?array $offsetsInDocument = null,
-        protected ?array $offsetsInContext = null,
-        protected ?array $documentIds = null,
-        protected ?array $meta = null
+        public string $answer,
+        public string $type = 'extractive',
+        public ?float $score = null,
+        public ?array $context = null,
+        public ?array $offsetsInDocument = null,
+        public ?array $offsetsInContext = null,
+        public ?array $documentIds = null,
+        public ?array $meta = null
     ) {
     }
 }

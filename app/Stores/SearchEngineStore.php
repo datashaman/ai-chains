@@ -3,6 +3,7 @@
 namespace App\Stores;
 
 use App\Schema\Document;
+use App\Schema\Label;
 use Generator;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
@@ -64,6 +65,42 @@ abstract class SearchEngineStore extends Store
         );
     }
 
+    public function getAllLabels(
+        ?string $index = null,
+        ?array $filters = null,
+        ?array $headers = null,
+        int $batchSize = 10_000
+    ): array {
+        $index = $index ?: $this->labelIndex;
+
+        $result = iterator_to_array(
+            $this->getAllDocumentsInIndex(
+                index: $index,
+                filters: $filters,
+                batchSize: $batchSize,
+                headers: $headers
+            )
+        );
+
+        try {
+            $labels = array_map(
+                fn ($hit) => Label::make([
+                    ...$hit['_source'],
+                    'id' => $hit['_id'],
+                ]),
+                $result
+            );
+        } catch (ValidationError $exception) {
+            throw new DocumentStoreError(
+                "Failed to create labels from the content of index '{$index}'. Are you sure this index contains labels?",
+                0,
+                $exception
+            );
+        }
+
+        return $labels;
+    }
+
     public function writeDocuments(
         array $documents,
         ?string $index = null,
@@ -85,22 +122,42 @@ abstract class SearchEngineStore extends Store
             throw new DocumentStoreError("duplicateDocuments must be one of: {$options}");
         }
 
+        $fieldMap = $this->createDocumentFieldMap();
+
+        $documentObjects = array_map(
+            fn ($d) => is_array($d) ? Document::make($d) : $d,
+            $documents
+        );
+
+        $documentObjects = $this->handleDuplicateDocuments(
+            documents: $documentObjects,
+            index: $index,
+            duplicateDocuments: $duplicateDocuments,
+            headers: $headers
+        );
+
         $documentsToIndex = [];
 
-        foreach ($documents as $document) {
-            $doc = $document->toArray();
+        foreach ($documentObjects as $doc) {
+            $_doc = [
+                '_op_type' => $duplicateDocuments === 'overwrite' ? 'index' : 'create',
+                '_index' => $index,
+                ...$doc->toArray(),
+            ];
 
-            Arr::forget($doc, 'score');
-            $doc = array_filter($doc);
+            $_doc['_id'] = Arr::pull($_doc, 'id');
 
-            if (Arr::has($doc, 'meta')) {
-                foreach ($doc['meta'] as $k => $v) {
-                    $doc[$k] = $v;
+            Arr::forget($_doc, 'score');
+            $_doc = array_filter($_doc);
+
+            if (Arr::has($_doc, 'meta')) {
+                foreach ($_doc['meta'] as $k => $v) {
+                    $_doc[$k] = $v;
                 }
-                Arr::forget($doc, 'meta');
+                Arr::forget($_doc, 'meta');
             }
 
-            $documentsToIndex[] = $doc;
+            $documentsToIndex[] = $_doc;
 
             if (count($documentsToIndex) % $batchSize == 0) {
                 $this->bulk($documentsToIndex, refresh: $this->refreshType, headers: $headers);
@@ -111,6 +168,81 @@ abstract class SearchEngineStore extends Store
         if ($documentsToIndex) {
             $this->bulk($documentsToIndex, refresh: $this->refreshType, headers: $headers);
         }
+    }
+
+    public function writeLabels(
+        array $labels,
+        ?string $index = null,
+        ?array $headers = null,
+        int $batchSize = 10_000
+    ) {
+        $index = $index ?: $this->labelIndex;
+
+        if ($index && !$this->indexExists($index, headers: $headers)) {
+            $this->createLabelIndex($index, headers: $headers);
+        }
+
+        $labelList = [];
+        foreach ($labels as $label) {
+            $labelList[] = is_array($label) ? Label::make($label) : $label;
+        }
+
+        $duplicateIds = [];
+        foreach ($this->getDuplicateLabels($labelList, index: $index) as $label) {
+            $duplicateIds[] = $label->id;
+        }
+
+        if (count($duplicateIds) > 0) {
+            $joinedIds = implode(',', $duplicateIds);
+
+            Log::warning(
+                "Duplicate Label IDs: Inserting a Label whose id already exists in this document store."
+                . " This will overwrite the old Label. Please make sure Label.id is a unique identifier of"
+                . " the answer annotation and not the question."
+                . " Problematic ids: {$joinedIds}"
+            );
+        }
+
+        $labelsToIndex = [];
+
+        foreach($labelList as $label) {
+            # create timestamps if not available yet
+            if (!$label->createdAt) {
+                $label->createdAt = date("Y-m-d H:i:s");
+            }
+            if (!$label->updatedAt) {
+                $label->updatedAt = $label->createdAt;
+            }
+
+            $_label = [
+                '_op_type' => $this->duplicateDocuments ? 'index' : 'create',
+                '_index' => $index,
+                ...$label->toArray(),
+            ];
+
+            if ($label->id) {
+                $_label['_id'] = (string) Arr::pull($_label, 'id');
+            }
+
+            $labelsToIndex[] = $_label;
+
+            if (count($labelsToIndex) % $batchSize === 0) {
+                $this->bulk($labelsToIndex, refresh: $this->refreshType, headers: $headers);
+                $labelsToIndex = [];
+            }
+        }
+
+        if ($labelsToIndex) {
+            $this->bulk($labelsToIndex, refresh: $this->refreshType, headers: $headers);
+        }
+    }
+
+    protected function createDocumentFieldMap()
+    {
+        return [
+            $this->contentField => 'content',
+            $this->embeddingField = 'embedding',
+        ];
     }
 
     protected function bulk(

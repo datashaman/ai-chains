@@ -257,9 +257,9 @@ class OpensearchStore extends SearchEngineStore
 
         foreach ($documents as $document) {
             $operation = $this->duplicateDocuments ? 'index' : 'create';
-            $bulk[] = [ $operation => [
-                '_index' => $this->index,
-                '_id' => Arr::pull($document, 'id'),
+            $bulk[] = [ Arr::pull($document, '_op_type') => [
+                '_index' => Arr::pull($document, '_index'),
+                '_id' => Arr::pull($document, '_id'),
             ]];
             $bulk[] = $document;
         }

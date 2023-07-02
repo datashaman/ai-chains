@@ -5,6 +5,7 @@
 /.fleet
 /.idea
 /.phpunit.cache
+/.venv/
 /.vscode
 /node_modules
 /phpunit.xml
