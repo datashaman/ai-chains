@@ -25,7 +25,7 @@ class TextConverterJob extends Job
             );
         }
 
-        $this->done($documents);
+        $this->done(null, $documents);
     }
 
     public function convert(
